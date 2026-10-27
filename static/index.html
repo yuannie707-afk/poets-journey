@@ -170,8 +170,12 @@ async function probe(base, timeoutMs) {
 }
 
 async function resolveApi() {
-  const cands = [location.origin.replace(/\/$/, '')];
-  for (let p = 8000; p <= 8005; p++) cands.push('http://127.0.0.1:' + p);
+  const here = location.origin.replace(/\/$/, '');
+  const cands = [here];
+  // 只有本机打开时才猜本地端口；线上站点不该去探测访客自己的 localhost
+  if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) {
+    for (let p = 8000; p <= 8005; p++) cands.push('http://127.0.0.1:' + p);
+  }
   for (const b of cands) {
     if (await probe(b)) return b;
   }
@@ -184,8 +188,10 @@ function setStatus(ok, text) {
 }
 
 function apiHint() {
-  return '后端没连上。请双击 D:\\20261011超图校\\后端\\run.bat，保持那个黑窗口不要关，' +
-         '窗口里会打印实际端口（默认 8000），然后刷新本页。';
+  const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  return local
+    ? '后端没连上。请双击 D:\\20261011超图校\\后端\\run.bat，保持窗口不关，再刷新本页。'
+    : '服务暂时不可用（可能刚从休眠中唤醒或正在部署）。请等 30 秒刷新一次；连续失败说明部署有问题。';
 }
 
 // ===== 4. 弹窗 =====
