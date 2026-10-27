@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>诗路重现 · 诗人轨迹</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  html,body,#map{height:100%;margin:0;}
+  .dot{width:11px;height:11px;border-radius:50%;display:inline-block;flex:none;}
+  #tip{position:fixed;left:12px;bottom:12px;background:#fff;padding:8px 12px;border-radius:6px;font-size:12px;color:#b00;display:none;max-width:60vw;z-index:1001;}
+
+  #controls{position:fixed;top:12px;left:60px;z-index:1000;background:#fff;padding:8px 10px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.3);display:flex;align-items:center;gap:8px;font-size:13px;}
+  #controls select{font-size:13px;padding:3px 6px;max-width:130px;}
+  #controls button{font-size:13px;padding:4px 10px;cursor:pointer;border:1px solid #ccc;background:#f5f5f5;border-radius:5px;}
+  #controls button:hover{background:#e8f0fe;}
+  #bar{width:140px;height:6px;background:#eee;border-radius:3px;overflow:hidden;}
+  #bar i{display:block;height:100%;width:0;background:#2563eb;}
+
+  #status{position:fixed;top:12px;right:262px;z-index:1000;background:#fff;padding:6px 10px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.3);font-size:12px;color:#555;display:flex;align-items:center;gap:6px;}
+  #status i{width:8px;height:8px;border-radius:50%;background:#bbb;display:inline-block;}
+  #status.ok i{background:#22c55e;}
+  #status.bad i{background:#ef4444;}
+
+  #rangeBox{position:fixed;left:12px;bottom:12px;z-index:1000;background:#fff;padding:10px 12px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.3);font-size:12.5px;width:246px;}
+  #rangeBox h4{margin:0 0 6px;font-size:13.5px;display:flex;justify-content:space-between;align-items:baseline;}
+  #rangeBox h4 small{font-weight:400;color:#888;font-size:11.5px;}
+  #rangeBox input[type=range]{width:100%;margin:5px 0 2px;}
+  .rb-row{display:flex;justify-content:space-between;color:#666;font-size:11.5px;margin-top:2px;}
+  #rangeReset{margin-top:6px;font-size:12px;padding:3px 9px;cursor:pointer;border:1px solid #ccc;background:#f7f7f7;border-radius:5px;}
+
+  #timeline{position:fixed;top:12px;right:12px;z-index:1000;width:240px;max-height:74vh;overflow:auto;background:#fff;padding:10px 12px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.3);font-size:12.5px;}
+  #timeline h4{margin:0 0 8px;font-size:14px;display:flex;justify-content:space-between;align-items:baseline;}
+  #timeline h4 small{font-weight:400;color:#888;font-size:11px;}
+  .t-item{padding:6px 8px;border-left:3px solid #ddd;cursor:pointer;line-height:1.5;}
+  .t-item:hover{background:#f0f4ff;}
+  .t-item.active{background:#e8f0fe;border-left-color:#2563eb;font-weight:700;}
+
+  #profile{position:fixed;left:12px;top:66px;z-index:1000;width:262px;background:#fff;padding:12px 14px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.3);font-size:12.5px;line-height:1.75;display:none;}
+  #profile h3{margin:0 0 2px;font-size:15px;display:flex;align-items:center;gap:7px;}
+  #profile .pmeta{color:#888;font-size:11.5px;margin-bottom:7px;}
+  #profile .pbio{color:#444;}
+  #profile .pcount{color:#888;font-size:11.5px;margin-top:7px;}
+
+  .ppdyn{display:inline-block;font-size:11px;background:#6b7280;color:#fff;border-radius:4px;padding:0 5px;margin-left:4px;vertical-align:1px;}
+  .pplife{color:#888;font-size:11.5px;}
+  .ppbio{display:block;color:#666;font-size:11.5px;border-left:2px solid #eee;padding-left:7px;margin:4px 0 6px;}
+
+  #aiBtn{position:fixed;right:16px;bottom:16px;z-index:1002;background:#2563eb;color:#fff;border:0;border-radius:22px;padding:10px 18px;font-size:13.5px;cursor:pointer;box-shadow:0 3px 12px rgba(37,99,235,.4);}
+  #aiBtn:hover{background:#1d4ed8;}
+  #aiPanel{position:fixed;right:16px;bottom:62px;z-index:1002;width:360px;height:420px;background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:none;flex-direction:column;overflow:hidden;}
+  #aiPanel.open{display:flex;}
+  .ai-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #eee;font-size:13.5px;font-weight:600;}
+  .ai-head small{font-weight:400;color:#888;font-size:11.5px;}
+  .ai-head button{margin-left:auto;border:0;background:none;font-size:18px;line-height:1;cursor:pointer;color:#999;}
+  #aiMsgs{flex:1;overflow:auto;padding:10px 12px;font-size:12.5px;line-height:1.7;}
+  .msg{margin-bottom:9px;display:flex;}
+  .msg .bubble{max-width:86%;padding:7px 10px;border-radius:9px;white-space:pre-wrap;word-break:break-word;}
+  .msg.me{justify-content:flex-end;}
+  .msg.me .bubble{background:#e8f0fe;color:#1e3a8a;}
+  .msg.ai .bubble{background:#f5f6f8;color:#222;}
+  .msg.err .bubble{background:#fdecec;color:#b91c1c;}
+  .ai-input{display:flex;gap:8px;padding:8px 10px;border-top:1px solid #eee;}
+  .ai-input textarea{flex:1;height:52px;resize:none;font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;outline:none;}
+  .ai-input button{border:0;background:#2563eb;color:#fff;border-radius:8px;padding:0 14px;font-size:13px;cursor:pointer;}
+  .ai-input button:disabled{background:#9db8e8;cursor:default;}
+
+  #aiKeyBox{display:none;padding:10px 12px;border-top:1px solid #eee;background:#fffdf5;}
+  #aiKeyBox .kb-title{font-size:11.5px;color:#92400e;margin-bottom:6px;line-height:1.5;}
+  #aiKeyBox .kb-row{display:flex;gap:6px;}
+  #aiKeyBox input{flex:1;font-size:12px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;outline:none;}
+  #aiKeyBox button{border:0;background:#f59e0b;color:#fff;border-radius:6px;padding:0 12px;font-size:12.5px;cursor:pointer;}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="tip"></div>
+
+<div id="controls">
+  <select id="personSel"></select>
+  <button id="playBtn">播放</button>
+  <button id="pauseBtn">暂停</button>
+  <button id="resetBtn">重置</button>
+  <div id="bar"><i></i></div>
+</div>
+
+<div id="status"><i></i><span id="statusText">正在连接后端…</span></div>
+<div id="profile"></div>
+
+<div id="rangeBox">
+  <h4>年份筛选 <small id="rangeText">—</small></h4>
+  <input type="range" id="yearFrom" min="0" max="1" value="0">
+  <input type="range" id="yearTo" min="0" max="1" value="1">
+  <div class="rb-row"><span>起点</span><span>终点</span></div>
+  <button id="rangeReset">重置年份</button>
+</div>
+
+<div id="timeline"><h4>时间轴 <small id="tCount"></small></h4><div id="tlist">选择一位诗人开始</div></div>
+
+<button id="aiBtn">问 AI</button>
+<div id="aiPanel">
+  <div class="ai-head">诗路 AI <small id="aiWho">全部诗人</small><small id="aiQuota"></small><button id="aiClose" title="关闭">×</button></div>
+  <div id="aiMsgs"></div>
+  <div id="aiKeyBox">
+    <div class="kb-title">还没有 DeepSeek Key：去 platform.deepseek.com →「API keys」创建一个（充值后可用），粘贴到这里即可，会自动保存并重试。</div>
+    <div class="kb-row">
+      <input id="aiKey" placeholder="sk-..." autocomplete="off">
+      <button id="aiKeySave">保存</button>
+    </div>
+  </div>
+  <div class="ai-input">
+    <textarea id="aiQ" placeholder="例：李白为什么离开长安？（选中诗人后会自动带上他的资料）"></textarea>
+    <button id="aiSend">发送</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ===== 1. 建图 =====
+const map = L.map('map').setView([30, 112], 5);
+
+const TIANDITU_TK = 'd884a3ac545a4b72a122f1ab3b0eb731';
+if (TIANDITU_TK) {
+  L.tileLayer('https://t{s}.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=' + TIANDITU_TK,
+    { subdomains:['0','1','2','3','4','5','6','7'], attribution:'天地图' }).addTo(map);
+  L.tileLayer('https://t{s}.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=' + TIANDITU_TK,
+    { subdomains:['0','1','2','3','4','5','6','7'] }).addTo(map);
+}
+
+// ===== 2. 配色 =====
+const colors = {
+  '刘克庄':'#2563eb','孟浩然':'#22a06b','张岱':'#7aa7ff','李清照':'#e6c800',
+  '李白':'#22c3d6','杜甫':'#e8a0b0','王安石':'#9b59d0','苏轼':'#f5b820',
+  '范成大':'#f08a24','谢灵运':'#8a5a2b','辛弃疾':'#e02020','陆游':'#8a9bd0'
+};
+
+const profiles = {};
+const persons = {};
+let curPerson = null;
+let step = 0;
+let timer = null;
+let range = { from: 0, to: 9999 };
+let API = location.origin;          // 后端地址，自动探测
+
+const sel = document.getElementById('personSel');
+const tlist = document.getElementById('tlist');
+const bar = document.querySelector('#bar i');
+const yearFrom = document.getElementById('yearFrom');
+const yearTo = document.getElementById('yearTo');
+const rangeText = document.getElementById('rangeText');
+const tCount = document.getElementById('tCount');
+const statusBox = document.getElementById('status');
+const statusText = document.getElementById('statusText');
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c]));
+}
+
+// ===== 3. 后端探测 =====
+async function probe(base, timeoutMs) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeoutMs || 1200);
+  try {
+    const r = await fetch(base + '/api/health', { signal: ctl.signal, cache: 'no-store' });
+    return r.ok;
+  } catch (e) {
+    return false;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function resolveApi() {
+  const cands = [location.origin.replace(/\/$/, '')];
+  for (let p = 8000; p <= 8005; p++) cands.push('http://127.0.0.1:' + p);
+  for (const b of cands) {
+    if (await probe(b)) return b;
+  }
+  return '';
+}
+
+function setStatus(ok, text) {
+  statusBox.className = ok ? 'ok' : 'bad';
+  statusText.textContent = text;
+}
+
+function apiHint() {
+  return '后端没连上。请双击 D:\\20261011超图校\\后端\\run.bat，保持那个黑窗口不要关，' +
+         '窗口里会打印实际端口（默认 8000），然后刷新本页。';
+}
+
+// ===== 4. 弹窗 =====
+function popupHtml(n) {
+  const prof = profiles[n.name] || {};
+  const suspect = String(n.props['年份存疑'] || '').trim() === '是';
+  return `<b>${escapeHtml(n.name)}</b><span class="ppdyn">${escapeHtml(prof.dynasty || '')}</span>` +
+    `<br><span class="pplife">${escapeHtml(prof.life || '')}</span>` +
+    (prof.bio ? `<span class="ppbio">${escapeHtml(prof.bio)}</span>` : '') +
+    `<b>${escapeHtml(n.props['年号'])}</b>（${n.props['年份']}）· 📍${escapeHtml(n.props['地名'])}<br>` +
+    `${escapeHtml(n.props['事件'])}` +
+    (n.props['诗作'] ? `<br><i>${escapeHtml(n.props['诗作'])}</i>` : '') +
+    (suspect ? '<br><span style="color:#b00">※ 年份存疑</span>' : '');
+}
+
+// ===== 5. 启动 =====
+(async function boot() {
+  setStatus(false, '正在连接后端…');
+  const found = await resolveApi();
+  if (!found) {
+    setStatus(false, '后端未连接');
+    const t = document.getElementById('tip');
+    t.style.display = 'block';
+    t.textContent = apiHint();
+    return;
+  }
+  API = found;
+  setStatus(true, '后端 ' + API.replace('http://', ''));
+
+  let data;
+  try {
+    const r = await fetch(API + '/api/geojson', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    data = await r.json();
+  } catch (e) {
+    setStatus(false, '后端未连接');
+    const t = document.getElementById('tip');
+    t.style.display = 'block';
+    t.textContent = apiHint() + '（' + e.message + '）';
+    return;
+  }
+
+  const groups = {};
+  data.features.forEach(f => {
+    const p = f.properties;
+    const [lng, lat] = f.geometry.coordinates;
+    const name = p['人物'];
+    if (!groups[name]) groups[name] = [];
+    groups[name].push({ name, lat, lng, props: p, marker: null });
+  });
+
+  const years = [];
+  Object.keys(groups).forEach(name => {
+    groups[name].sort((a, b) => (a.props['年份'] - b.props['年份']) || String(a.props['id']).localeCompare(b.props['id']));
+    const nodeGroup = L.layerGroup();
+    const line = L.polyline([], { color: colors[name] || '#888', weight: 2, opacity: 0.55 });
+    persons[name] = { nodes: groups[name], nodeGroup, line, visible: [] };
+    groups[name].forEach(n => {
+      const suspect = String(n.props['年份存疑'] || '').trim() === '是';
+      const m = L.circleMarker([n.lat, n.lng], {
+        radius: 7, fillColor: colors[name] || '#888', color: '#fff', weight: 1,
+        fillOpacity: suspect ? 0.15 : 0.9
+      });
+      m.bindPopup(() => popupHtml(n), { maxWidth: 320, minWidth: 220 });
+      m.on('click', () => { m.openPopup(); syncToNode(n); });
+      n.marker = m;
+      years.push(n.props['年份']);
+    });
+  });
+
+  const minY = Math.min.apply(null, years), maxY = Math.max.apply(null, years);
+  range = { from: minY, to: maxY };
+  [yearFrom, yearTo].forEach(el => { el.min = minY; el.max = maxY; el.step = 1; });
+  yearFrom.value = minY; yearTo.value = maxY;
+  updateRangeText();
+
+  initControls();
+  render();
+  map.fitBounds(Object.values(persons).flatMap(p => p.nodes.map(n => [n.lat, n.lng])));
+  loadProfiles();
+  refreshKeyStatus();
+})();
+
+async function refreshKeyStatus() {
+  try {
+    const r = await fetch(API + '/api/config/status', { cache: 'no-store' });
+    if (!r.ok) return;
+    const j = await r.json();
+    if (!j.configured) showKeyBox(true);
+  } catch (e) { /* 不影响地图 */ }
+  refreshQuota();
+}
+
+async function refreshQuota() {
+  const box = document.getElementById('aiQuota');
+  try {
+    const r = await fetch(API + '/api/ask/quota', { cache: 'no-store' });
+    if (!r.ok) return;
+    const j = await r.json();
+    box.textContent = (j.remaining < 0) ? '本机不限次' : ('今日剩余 ' + j.remaining + ' 次');
+  } catch (e) { box.textContent = ''; }
+}
+
+async function loadProfiles() {
+  try {
+    const r = await fetch(API + '/api/persons', { cache: 'no-store' });
+    if (!r.ok) return;
+    const j = await r.json();
+    (j.list || []).forEach(p => { profiles[p.name] = p; });
+    renderProfile(curPerson);
+  } catch (e) { /* 简介拿不到不影响地图 */ }
+}
+
+// ===== 6. 年份筛选 =====
+function updateRangeText() { rangeText.textContent = range.from + ' — ' + range.to; }
+
+function onRangeChange() {
+  let a = parseInt(yearFrom.value, 10), b = parseInt(yearTo.value, 10);
+  if (a > b) { const t = a; a = b; b = t; yearFrom.value = a; yearTo.value = b; }
+  range = { from: a, to: b };
+  updateRangeText();
+  stop();
+  step = 0;
+  render();
+}
+yearFrom.addEventListener('input', onRangeChange);
+yearTo.addEventListener('input', onRangeChange);
+document.getElementById('rangeReset').onclick = () => {
+  yearFrom.value = yearFrom.min; yearTo.value = yearTo.max; onRangeChange();
+};
+
+// ===== 7. 渲染 =====
+function render() {
+  Object.keys(persons).forEach(name => {
+    const P = persons[name];
+    P.nodeGroup.clearLayers();
+    P.visible = P.nodes.filter(n => n.props['年份'] >= range.from && n.props['年份'] <= range.to);
+    P.visible.forEach(n => n.marker.addTo(P.nodeGroup));
+    P.line.setLatLngs(P.visible.map(n => [n.lat, n.lng]));
+
+    const show = !curPerson || curPerson === name;
+    const hasLine = P.visible.length > 1;
+    if (show) {
+      if (!map.hasLayer(P.nodeGroup)) P.nodeGroup.addTo(map);
+      if (hasLine && !map.hasLayer(P.line)) P.line.addTo(map);
+      if (!hasLine) map.removeLayer(P.line);
+    } else {
+      map.removeLayer(P.nodeGroup);
+      map.removeLayer(P.line);
+    }
+  });
+  renderTimeline();
+  renderProfile(curPerson);
+  updateStep();
+}
+
+function renderTimeline() {
+  tlist.innerHTML = '';
+  if (!curPerson) {
+    tCount.textContent = '';
+    tlist.innerHTML = '<div style="color:#888">选择一位诗人，或直接点地图上的点</div>';
+    return;
+  }
+  const vis = persons[curPerson].visible;
+  tCount.textContent = vis.length + ' 个节点';
+  if (!vis.length) { tlist.innerHTML = '<div style="color:#888">当前年份区间内没有节点</div>'; return; }
+  vis.forEach((n, i) => {
+    const d = document.createElement('div');
+    d.className = 't-item';
+    d.innerHTML = `${n.props['年份']} · ${escapeHtml(n.props['年号'])}<br>${escapeHtml(n.props['地名'])}`;
+    d.onclick = () => { stop(); step = i; updateStep(); };
+    tlist.appendChild(d);
+  });
+}
+
+function renderProfile(name) {
+  const box = document.getElementById('profile');
+  if (!name) { box.style.display = 'none'; return; }
+  const p = profiles[name] || {};
+  const n = persons[name] ? persons[name].visible.length : 0;
+  box.innerHTML =
+    `<h3><span class="dot" style="background:${colors[name] || '#888'}"></span>${escapeHtml(name)}</h3>` +
+    `<div class="pmeta">${escapeHtml(p.dynasty || '')} · ${escapeHtml(p.life || '')}</div>` +
+    `<div class="pbio">${escapeHtml(p.bio || '（简介待补）')}</div>` +
+    `<div class="pcount">当前区间节点 ${n} 个</div>`;
+  box.style.display = 'block';
+}
+
+// ===== 8. 播放 =====
+function initControls() {
+  const optAll = document.createElement('option');
+  optAll.value = ''; optAll.textContent = '全部（显示所有人）';
+  sel.appendChild(optAll);
+  Object.keys(persons).forEach(name => {
+    const o = document.createElement('option'); o.value = name; o.textContent = name; sel.appendChild(o);
+  });
+  sel.onchange = () => { stop(); curPerson = sel.value || null; step = 0; render(); };
+  document.getElementById('playBtn').onclick = play;
+  document.getElementById('pauseBtn').onclick = stop;
+  document.getElementById('resetBtn').onclick = () => { stop(); step = 0; updateStep(); };
+}
+
+function play() {
+  stop();
+  if (!curPerson) { alert('先选一位诗人（或点地图上的点）再播放'); return; }
+  const total = persons[curPerson].visible.length;
+  if (!total) return;
+  timer = setInterval(() => {
+    step++;
+    if (step >= total) { step = total - 1; stop(); }
+    updateStep();
+  }, 900);
+}
+function stop() { if (timer) { clearInterval(timer); timer = null; } }
+
+function updateStep() {
+  if (!curPerson) { bar.style.width = '0%'; return; }
+  const P = persons[curPerson];
+  const vis = P.visible;
+  if (!vis.length) { bar.style.width = '0%'; return; }
+  step = Math.max(0, Math.min(step, vis.length - 1));
+  const cur = vis[step];
+
+  P.line.setLatLngs(vis.slice(0, step + 1).map(n => [n.lat, n.lng]));
+  if (step > 0 && !map.hasLayer(P.line)) P.line.addTo(map);
+
+  P.nodes.forEach(n => n.marker.setStyle({ radius: n === cur ? 11 : 7 }));
+  map.panTo([cur.lat, cur.lng]);
+
+  tlist.querySelectorAll('.t-item').forEach((el, i) => el.classList.toggle('active', i === step));
+  const act = tlist.querySelector('.t-item.active');
+  if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest' });
+  bar.style.width = (vis.length > 1 ? step / (vis.length - 1) * 100 : 100) + '%';
+}
+
+function syncToNode(node) {
+  stop();
+  const name = node.name;
+  if (curPerson !== name) { curPerson = name; sel.value = name; render(); }
+  const idx = persons[name].visible.indexOf(node);
+  if (idx >= 0) {
+    step = idx;
+    updateStep();
+    map.setView([node.lat, node.lng], Math.max(map.getZoom(), 7));
+    if (node.marker) node.marker.openPopup();
+  }
+}
+
+// ===== 9. AI =====
+const aiPanel = document.getElementById('aiPanel');
+const aiMsgs = document.getElementById('aiMsgs');
+const aiQ = document.getElementById('aiQ');
+const aiSend = document.getElementById('aiSend');
+const aiWho = document.getElementById('aiWho');
+
+document.getElementById('aiBtn').onclick = () => {
+  aiPanel.classList.toggle('open');
+  aiWho.textContent = curPerson ? ('基于：' + curPerson) : '全部诗人';
+  if (aiPanel.classList.contains('open')) aiQ.focus();
+};
+document.getElementById('aiClose').onclick = () => aiPanel.classList.remove('open');
+
+function addMsg(kind, text) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + kind;
+  const b = document.createElement('div');
+  b.className = 'bubble';
+  b.textContent = text;
+  wrap.appendChild(b);
+  aiMsgs.appendChild(wrap);
+  aiMsgs.scrollTop = aiMsgs.scrollHeight;
+  return b;
+}
+
+let lastQuestion = '';
+const aiKeyBox = document.getElementById('aiKeyBox');
+const aiKeyInput = document.getElementById('aiKey');
+function showKeyBox(on) { aiKeyBox.style.display = on ? 'block' : 'none'; }
+
+document.getElementById('aiKeySave').onclick = async () => {
+  const key = aiKeyInput.value.trim();
+  if (!key) { aiKeyInput.focus(); return; }
+  const btn = document.getElementById('aiKeySave');
+  btn.disabled = true;
+  try {
+    const r = await fetch(API + '/api/config/key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    showKeyBox(false);
+    aiKeyInput.value = '';
+    addMsg('ai', 'Key 已保存（写进 后端\\config.local.json），马上重试…');
+    if (lastQuestion) { aiQ.value = lastQuestion; askAI(); }
+  } catch (e) {
+    addMsg('err', '保存失败：' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+};
+aiKeyInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('aiKeySave').click(); }
+});
+
+async function askAI() {
+  const q = aiQ.value.trim();
+  if (!q) return;
+  lastQuestion = q;
+  addMsg('me', q);
+  aiQ.value = '';
+  aiSend.disabled = true;
+  const holder = addMsg('ai', '思考中…');
+  try {
+    // 先确认后端还活着（服务关了 / 换端口都会在这里发现）
+    if (!(await probe(API, 1500))) {
+      const again = await resolveApi();
+      if (!again) throw new Error('backend-down');
+      API = again;
+      setStatus(true, '后端 ' + API.replace('http://', ''));
+    }
+    const res = await fetch(API + '/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q, person: curPerson })
+    });
+    const j = await res.json();
+    if (!res.ok) {
+      holder.parentElement.className = 'msg err';
+      holder.textContent = (j.error || ('请求失败 ' + res.status)) + (j.hint ? '\n' + j.hint : '');
+      if (res.status === 503) showKeyBox(true);
+    } else {
+      holder.textContent = j.answer || '(空回答)';
+      if (j.usage && j.usage.total_tokens) holder.textContent += '\n\n— tokens: ' + j.usage.total_tokens;
+      if (j.cached) holder.textContent += '\n（本次为缓存结果）';
+    }
+  } catch (e) {
+    holder.parentElement.className = 'msg err';
+    holder.textContent = (e.message === 'backend-down')
+      ? apiHint()
+      : '请求失败：' + e.message + '\n' + apiHint();
+    setStatus(false, '后端未连接');
+  } finally {
+    aiSend.disabled = false;
+    aiMsgs.scrollTop = aiMsgs.scrollHeight;
+    refreshQuota();
+  }
+}
+aiSend.onclick = askAI;
+aiQ.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); askAI(); }
+});
+</script>
+</body>
+</html>

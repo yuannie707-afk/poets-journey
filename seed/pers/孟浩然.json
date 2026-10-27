@@ -1,0 +1,104 @@
+{
+ "id": "menghaoran",
+ "name": "孟浩然",
+ "dynasty": "唐",
+ "bio": "襄州襄阳人，唐代山水田园诗人，与王维并称“王孟”，一生多在襄阳、吴越间漫游。",
+ "nodes": [
+  {
+   "id": "menghaoran-01",
+   "year": 689,
+   "yearText": "永昌元年",
+   "place": "襄阳市",
+   "event": "出生于襄阳城中书香之家",
+   "lng": 112.144,
+   "lat": 32.042
+  },
+  {
+   "id": "menghaoran-02",
+   "year": 708,
+   "yearText": "景龙二年",
+   "place": "襄阳市",
+   "event": "年二十，游鹿门山",
+   "poem": "《题鹿门山》",
+   "lng": 112.144,
+   "lat": 32.042
+  },
+  {
+   "id": "menghaoran-03",
+   "year": 712,
+   "yearText": "先天元年",
+   "place": "襄阳市",
+   "event": "送张子容应考进士",
+   "poem": "《送张子容进士举》",
+   "lng": 112.144,
+   "lat": 32.042
+  },
+  {
+   "id": "menghaoran-04",
+   "year": 717,
+   "yearText": "开元五年",
+   "place": "岳阳市",
+   "event": "登岳阳楼，献诗求荐",
+   "poem": "《望洞庭湖赠张丞相》",
+   "lng": 113.129,
+   "lat": 29.357
+  },
+  {
+   "id": "menghaoran-05",
+   "year": 728,
+   "yearText": "开元十六年",
+   "place": "长安（今陕西西安）",
+   "event": "长安科考落第",
+   "poem": "《长安早春》",
+   "approx": true,
+   "lng": 108.94,
+   "lat": 34.341
+  },
+  {
+   "id": "menghaoran-06",
+   "year": 729,
+   "yearText": "开元十七年",
+   "place": "苏州市",
+   "event": "漫游吴越，泛舟太湖，作诗婉言谢绝曹三御史举荐",
+   "lng": 120.585,
+   "lat": 31.299
+  },
+  {
+   "id": "menghaoran-07",
+   "year": 730,
+   "yearText": "开元十八年",
+   "place": "武汉市",
+   "event": "东游途中于黄鹤楼与李白作别",
+   "poem": "《黄鹤楼送孟浩然之广陵》",
+   "lng": 114.305,
+   "lat": 30.593
+  },
+  {
+   "id": "menghaoran-08",
+   "year": 731,
+   "yearText": "开元十九年",
+   "place": "越州（今浙江绍兴）",
+   "event": "在越州游历，与谢南池往还",
+   "lng": 120.582,
+   "lat": 30.03
+  },
+  {
+   "id": "menghaoran-09",
+   "year": 737,
+   "yearText": "开元二十五年",
+   "place": "荆州市",
+   "event": "入张九龄幕府，游历荆楚",
+   "lng": 112.239,
+   "lat": 30.335
+  },
+  {
+   "id": "menghaoran-10",
+   "year": 740,
+   "yearText": "开元二十八年",
+   "place": "襄阳市",
+   "event": "食鲜诱发毒疮离世",
+   "lng": 112.144,
+   "lat": 32.042
+  }
+ ]
+}
