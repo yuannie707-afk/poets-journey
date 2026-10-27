@@ -151,7 +151,7 @@ def quota_left(ip):
 # --------------------------------------------------------------------------- #
 # 基础接口
 # --------------------------------------------------------------------------- #
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def health():
     p, n = db.stats()
     return {"ok": True, "persons": p, "nodes": n, "db": db.DB_PATH,
