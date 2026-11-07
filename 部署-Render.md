@@ -48,10 +48,14 @@ git push -u origin main
 4. 往下找到 **Environment Variables** → Add：
    - Key：`DEEPSEEK_API_KEY`
    - Value：你的 `sk-...`（**只填这里，别写进代码**）
+   - 再加一条 Key：`ADMIN_TOKEN`
+   - Value：后台口令（自己定，10 位以上，别用 `123456`；填完点 Save，服务会自动重启）
 5. 点 **Create Web Service**，等 2–3 分钟，日志出现 `Uvicorn running on http://0.0.0.0:...` 就成功了；
 6. 页面顶部拿到地址：`https://poets-journey-xxxx.onrender.com`。
 
-打开这个地址 → 应该直接是地图页。
+打开这个地址 → 应该直接是地图页；`/admin.html` 是数据后台，第一次打开会要 `ADMIN_TOKEN`。
+
+> 已经部署过的服务补 `ADMIN_TOKEN`：Render 控制台 → 你的服务 → Environment → Add Environment Variable → 填完 Save（会重启一次）。`render.yaml` 里的 `sync: false` 只是给“从蓝图新建”用的，不会覆盖已有服务的变量。
 
 ---
 

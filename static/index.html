@@ -2,6 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>诗路重现 · 诗人轨迹</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
@@ -16,7 +17,7 @@
   #bar{width:140px;height:6px;background:#eee;border-radius:3px;overflow:hidden;}
   #bar i{display:block;height:100%;width:0;background:#2563eb;}
 
-  #status{position:fixed;top:12px;right:262px;z-index:1000;background:#fff;padding:6px 10px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.3);font-size:12px;color:#555;display:flex;align-items:center;gap:6px;}
+  #status{position:fixed;top:12px;right:12px;z-index:1000;background:#fff;padding:6px 10px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.3);font-size:12px;color:#555;display:flex;align-items:center;gap:6px;}
   #status i{width:8px;height:8px;border-radius:50%;background:#bbb;display:inline-block;}
   #status.ok i{background:#22c55e;}
   #status.bad i{background:#ef4444;}
@@ -28,14 +29,24 @@
   .rb-row{display:flex;justify-content:space-between;color:#666;font-size:11.5px;margin-top:2px;}
   #rangeReset{margin-top:6px;font-size:12px;padding:3px 9px;cursor:pointer;border:1px solid #ccc;background:#f7f7f7;border-radius:5px;}
 
-  #timeline{position:fixed;top:12px;right:12px;z-index:1000;width:240px;max-height:74vh;overflow:auto;background:#fff;padding:10px 12px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.3);font-size:12.5px;}
+  #timeline{position:fixed;top:52px;right:12px;z-index:1000;width:240px;max-height:calc(74vh - 40px);overflow:auto;background:#fff;padding:10px 12px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.3);font-size:12.5px;}
   #timeline h4{margin:0 0 8px;font-size:14px;display:flex;justify-content:space-between;align-items:baseline;}
   #timeline h4 small{font-weight:400;color:#888;font-size:11px;}
   .t-item{padding:6px 8px;border-left:3px solid #ddd;cursor:pointer;line-height:1.5;}
   .t-item:hover{background:#f0f4ff;}
   .t-item.active{background:#e8f0fe;border-left-color:#2563eb;font-weight:700;}
 
-  #profile{position:fixed;left:12px;top:66px;z-index:1000;width:262px;background:#fff;padding:12px 14px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.3);font-size:12.5px;line-height:1.75;display:none;}
+  #leftCol{position:fixed;left:12px;top:66px;z-index:1000;width:262px;display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 250px);overflow:auto;}
+  #profile{background:#fff;padding:12px 14px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.3);font-size:12.5px;line-height:1.75;display:none;}
+  #statsBox{background:#fff;padding:10px 14px 12px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.3);font-size:12.5px;display:none;}
+  #statsBox h4{margin:0 0 6px;font-size:13.5px;display:flex;justify-content:space-between;align-items:baseline;}
+  #statsBox h4 small{font-weight:400;color:#888;font-size:11px;}
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin:2px 0 8px;}
+  .stat-grid .k{color:#888;font-size:11px;}
+  .stat-grid .v{font-size:15px;font-weight:700;line-height:1.15;}
+  .bars{display:flex;align-items:flex-end;gap:2px;height:36px;}
+  .bars i{flex:1;background:#2563eb;opacity:.62;border-radius:2px 2px 0 0;min-height:2px;}
+  .bars-legend{display:flex;justify-content:space-between;color:#9aa0aa;font-size:10.5px;margin-top:3px;}
   #profile h3{margin:0 0 2px;font-size:15px;display:flex;align-items:center;gap:7px;}
   #profile .pmeta{color:#888;font-size:11.5px;margin-bottom:7px;}
   #profile .pbio{color:#444;}
@@ -69,6 +80,34 @@
   #aiKeyBox .kb-row{display:flex;gap:6px;}
   #aiKeyBox input{flex:1;font-size:12px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;outline:none;}
   #aiKeyBox button{border:0;background:#f59e0b;color:#fff;border-radius:6px;padding:0 12px;font-size:12.5px;cursor:pointer;}
+
+  .ppact{margin-top:7px;}
+  .share-btn{display:inline-block;font-size:11.5px;color:#2563eb;border:1px solid #cfe0fb;background:#f2f7ff;border-radius:5px;padding:2px 7px;cursor:pointer;}
+  .share-btn:hover{background:#e6f0ff;}
+
+  /* ===== 手机端（P2） ===== */
+  @media (max-width:720px){
+    body{overflow-x:hidden;}
+    #controls{left:8px;right:8px;top:8px;flex-wrap:wrap;gap:6px;padding:6px 8px;font-size:12px;max-width:calc(100vw - 16px);}
+    #controls select{font-size:12px;max-width:110px;padding:2px 4px;}
+    #controls button{font-size:12px;padding:3px 8px;}
+    #bar{width:90px;}
+    #status{top:auto;bottom:96px;right:8px;font-size:11px;padding:4px 8px;}
+    #leftCol{top:132px;left:8px;width:min(62vw,240px);max-height:calc(100vh - 360px);}
+    #profile,#statsBox{font-size:11.5px;line-height:1.6;padding:8px 10px;}
+    #profile{max-height:44vh;overflow:auto;}
+    #statsBox{display:none !important;}
+    #rangeBox{display:none;}
+    #timeline{left:0;right:0;top:auto;bottom:0;width:auto;max-height:46vh;border-radius:12px 12px 0 0;
+      transform:translateY(calc(100% - 44px));transition:transform .25s ease;padding-bottom:16px;}
+    #timeline.open{transform:translateY(0);}
+    #timeline h4{cursor:pointer;}
+    #timeline h4::after{content:"▾";color:#9aa0aa;margin-left:4px;}
+    #timeline.open h4::after{content:"▴";}
+    #aiBtn{bottom:52px;right:12px;padding:8px 14px;font-size:12.5px;}
+    #aiPanel{left:8px;right:8px;bottom:96px;width:auto;height:56vh;}
+    #tip{max-width:90vw;font-size:11.5px;}
+  }
 </style>
 </head>
 <body>
@@ -84,7 +123,15 @@
 </div>
 
 <div id="status"><i></i><span id="statusText">正在连接后端…</span></div>
-<div id="profile"></div>
+<div id="leftCol">
+  <div id="profile"></div>
+  <div id="statsBox">
+    <h4>数据统计 <small id="statWho">全部诗人</small></h4>
+    <div class="stat-grid" id="statGrid"></div>
+    <div class="bars" id="statBars"></div>
+    <div class="bars-legend"><span id="statFrom"></span><span id="statTo"></span></div>
+  </div>
+</div>
 
 <div id="rangeBox">
   <h4>年份筛选 <small id="rangeText">—</small></h4>
@@ -130,8 +177,16 @@ if (TIANDITU_TK) {
 const colors = {
   '刘克庄':'#2563eb','孟浩然':'#22a06b','张岱':'#7aa7ff','李清照':'#e6c800',
   '李白':'#22c3d6','杜甫':'#e8a0b0','王安石':'#9b59d0','苏轼':'#f5b820',
-  '范成大':'#f08a24','谢灵运':'#8a5a2b','辛弃疾':'#e02020','陆游':'#8a9bd0'
+  '范成大':'#f08a24','谢灵运':'#8a5a2b','辛弃疾':'#e02020','陆游':'#8a9bd0',
+  '王维':'#6d8f3f','白居易':'#d946ef','韩愈':'#0284c7','柳宗元':'#b45309',
+  '李商隐':'#64748b','杜牧':'#be123c','欧阳修':'#15803d','杨万里':'#a21caf'
 };
+
+// 配色以接口里的 color 为准（后台改色能立刻生效），静态表只是兜底
+function colorOf(name) {
+  const p = profiles[name];
+  return (p && p.color) || colors[name] || '#888';
+}
 
 const profiles = {};
 const persons = {};
@@ -204,8 +259,60 @@ function popupHtml(n) {
     `<b>${escapeHtml(n.props['年号'])}</b>（${n.props['年份']}）· 📍${escapeHtml(n.props['地名'])}<br>` +
     `${escapeHtml(n.props['事件'])}` +
     (n.props['诗作'] ? `<br><i>${escapeHtml(n.props['诗作'])}</i>` : '') +
-    (suspect ? '<br><span style="color:#b00">※ 年份存疑</span>' : '');
+    (suspect ? '<br><span style="color:#b00">※ 年份存疑</span>' : '') +
+    `<div class="ppact"><a class="share-btn" data-id="${escapeHtml(n.props['id'])}">🔗 复制这个点的链接</a></div>`;
 }
+
+// 点位分享：?node=libai-05 打开就直接定位到那个点
+function shareUrlFor(id) {
+  return location.origin + location.pathname + '?node=' + encodeURIComponent(id);
+}
+
+function focusNodeById(id) {
+  const target = String(id || '').trim();
+  if (!target) return false;
+  for (const name of Object.keys(persons)) {
+    const idx = persons[name].nodes.findIndex(n => String(n.props['id']) === target);
+    if (idx < 0) continue;
+    const node = persons[name].nodes[idx];
+    curPerson = name;
+    sel.value = name;
+    step = 0;
+    render();
+    let vi = persons[name].visible.indexOf(node);
+    if (vi < 0) {                       // 落在年份筛选之外时，先放开筛选
+      yearFrom.value = yearFrom.min;
+      yearTo.value = yearTo.max;
+      onRangeChange();
+      vi = persons[name].visible.indexOf(node);
+    }
+    if (vi >= 0) { step = vi; updateStep(); }
+    map.setView([node.lat, node.lng], Math.max(map.getZoom(), 7));
+    setTimeout(() => { if (node.marker) node.marker.openPopup(); }, 80);
+    loadStats(name);
+    const tl = document.getElementById('timeline');
+    if (tl && matchMedia('(max-width: 720px)').matches) tl.classList.remove('open');
+    return true;
+  }
+  return false;
+}
+
+map.on('popupopen', function (e) {
+  const el = e.popup && e.popup.getElement();
+  const btn = el && el.querySelector('.share-btn');
+  if (!btn) return;
+  btn.onclick = async function (ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const url = shareUrlFor(btn.getAttribute('data-id'));
+    try {
+      await navigator.clipboard.writeText(url);
+      btn.textContent = '✓ 已复制，发给同学就行';
+    } catch (err) {
+      window.prompt('复制这个链接：', url);
+    }
+  };
+});
 
 // ===== 5. 启动 =====
 (async function boot() {
@@ -220,6 +327,8 @@ function popupHtml(n) {
   }
   API = found;
   setStatus(true, '后端 ' + API.replace('http://', ''));
+
+  await loadProfiles();          // 先拿人物（配色/简介），画点才能用上 color
 
   let data;
   try {
@@ -247,12 +356,12 @@ function popupHtml(n) {
   Object.keys(groups).forEach(name => {
     groups[name].sort((a, b) => (a.props['年份'] - b.props['年份']) || String(a.props['id']).localeCompare(b.props['id']));
     const nodeGroup = L.layerGroup();
-    const line = L.polyline([], { color: colors[name] || '#888', weight: 2, opacity: 0.55 });
+    const line = L.polyline([], { color: colorOf(name), weight: 2, opacity: 0.55 });
     persons[name] = { nodes: groups[name], nodeGroup, line, visible: [] };
     groups[name].forEach(n => {
       const suspect = String(n.props['年份存疑'] || '').trim() === '是';
       const m = L.circleMarker([n.lat, n.lng], {
-        radius: 7, fillColor: colors[name] || '#888', color: '#fff', weight: 1,
+        radius: 7, fillColor: colorOf(name), color: '#fff', weight: 1,
         fillOpacity: suspect ? 0.15 : 0.9
       });
       m.bindPopup(() => popupHtml(n), { maxWidth: 320, minWidth: 220 });
@@ -271,9 +380,51 @@ function popupHtml(n) {
   initControls();
   render();
   map.fitBounds(Object.values(persons).flatMap(p => p.nodes.map(n => [n.lat, n.lng])));
-  loadProfiles();
+  loadStats(null);
+  const shareId = new URLSearchParams(location.search).get('node');
+  if (shareId) {
+    const ok = focusNodeById(shareId);
+    if (!ok) {
+      const t = document.getElementById('tip');
+      t.style.display = 'block';
+      t.textContent = '链接里的点位 ' + shareId + ' 没找到（可能已被删除），已显示全部轨迹。';
+    }
+  }
   refreshKeyStatus();
 })();
+
+// ===== 统计面板 =====
+async function loadStats(name) {
+  const box = document.getElementById('statsBox');
+  try {
+    const pid = name ? ((profiles[name] && profiles[name].id) || name) : '';
+    const q = pid ? ('?person=' + encodeURIComponent(pid)) : '';
+    const r = await fetch(API + '/api/stats' + q, { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    renderStats(await r.json(), name);
+    box.style.display = 'block';
+  } catch (e) {
+    box.style.display = 'none';
+  }
+}
+
+function renderStats(s, name) {
+  const items = [
+    ['节点', s.nodes], ['城市', s.cities], ['省份', s.provinces],
+    ['轨迹里程', Math.round(s.distance_km).toLocaleString() + ' km'], ['诗作', s.poems]
+  ];
+  if (!name) items.unshift(['人物', s.persons]);
+  document.getElementById('statWho').textContent = name ? ('仅 ' + s.name) : '全部诗人';
+  document.getElementById('statGrid').innerHTML =
+    items.map(it => `<div><div class="k">${it[0]}</div><div class="v">${it[1]}</div></div>`).join('');
+  const dec = s.decades || [];
+  const max = Math.max.apply(null, dec.map(d => d.count).concat([1]));
+  document.getElementById('statBars').innerHTML = dec.map(d =>
+    `<i style="height:${Math.max(5, Math.round(d.count / max * 100))}%" ` +
+    `title="${d.decade}—${d.decade + 9} 年：${d.count} 个节点"></i>`).join('');
+  document.getElementById('statFrom').textContent = dec.length ? (dec[0].decade + 's') : '';
+  document.getElementById('statTo').textContent = dec.length ? (dec[dec.length - 1].decade + 's') : '';
+}
 
 async function refreshKeyStatus() {
   try {
@@ -373,7 +524,7 @@ function renderProfile(name) {
   const p = profiles[name] || {};
   const n = persons[name] ? persons[name].visible.length : 0;
   box.innerHTML =
-    `<h3><span class="dot" style="background:${colors[name] || '#888'}"></span>${escapeHtml(name)}</h3>` +
+    `<h3><span class="dot" style="background:${colorOf(name)}"></span>${escapeHtml(name)}</h3>` +
     `<div class="pmeta">${escapeHtml(p.dynasty || '')} · ${escapeHtml(p.life || '')}</div>` +
     `<div class="pbio">${escapeHtml(p.bio || '（简介待补）')}</div>` +
     `<div class="pcount">当前区间节点 ${n} 个</div>`;
@@ -388,7 +539,7 @@ function initControls() {
   Object.keys(persons).forEach(name => {
     const o = document.createElement('option'); o.value = name; o.textContent = name; sel.appendChild(o);
   });
-  sel.onchange = () => { stop(); curPerson = sel.value || null; step = 0; render(); };
+  sel.onchange = () => { stop(); curPerson = sel.value || null; step = 0; render(); loadStats(curPerson); };
   document.getElementById('playBtn').onclick = play;
   document.getElementById('pauseBtn').onclick = stop;
   document.getElementById('resetBtn').onclick = () => { stop(); step = 0; updateStep(); };
@@ -430,7 +581,7 @@ function updateStep() {
 function syncToNode(node) {
   stop();
   const name = node.name;
-  if (curPerson !== name) { curPerson = name; sel.value = name; render(); }
+  if (curPerson !== name) { curPerson = name; sel.value = name; render(); loadStats(name); }
   const idx = persons[name].visible.indexOf(node);
   if (idx >= 0) {
     step = idx;
@@ -544,6 +695,11 @@ async function askAI() {
 aiSend.onclick = askAI;
 aiQ.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); askAI(); }
+});
+
+// 手机端：点时间轴标题展开/收起底部抽屉
+document.querySelector('#timeline h4').addEventListener('click', () => {
+  document.getElementById('timeline').classList.toggle('open');
 });
 </script>
 </body>

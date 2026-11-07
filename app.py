@@ -6,19 +6,28 @@
     /api/import  /api/export  /api/geojson  /api/ask  /api/ask/quota
     /api/config/status  /api/config/key
 
+管理后台（P0）：/admin.html
+    写操作（POST/PUT/DELETE/import）需带 X-Admin-Token，口令来自环境变量 ADMIN_TOKEN；
+    只读 GET 不校验，公开页面照常访问。
+
 本地跑：  uvicorn app:app --reload --port 8000
 线上跑：  uvicorn app:app --host 0.0.0.0 --port $PORT
 """
+import hmac
+import io
 import json
+import math
 import os
+import re
 import ssl
 import threading
 import time
 import urllib.error
 import urllib.request
+import zipfile
 
-from fastapi import Body, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import Body, Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 import db
@@ -149,6 +158,36 @@ def quota_left(ip):
 
 
 # --------------------------------------------------------------------------- #
+# 管理口令：所有写操作（POST/PUT/DELETE/import）都要带 X-Admin-Token
+# --------------------------------------------------------------------------- #
+ADMIN_TOKEN = (os.environ.get("ADMIN_TOKEN") or "").strip()
+LOCAL_IPS = ("127.0.0.1", "::1", "testclient")
+
+
+def is_local(request: Request):
+    return client_ip(request) in LOCAL_IPS
+
+
+def admin_guard(request: Request):
+    """写操作校验。
+
+    - 配了 ADMIN_TOKEN：请求头 X-Admin-Token 必须一致，否则 401；
+    - 没配 ADMIN_TOKEN：只放行本机（本地开发），线上直接 503，防止裸奔。
+    只读接口（GET）不校验，公开页面照常访问。
+    """
+    if not ADMIN_TOKEN:
+        if is_local(request):
+            return
+        raise HTTPException(503, "服务端没有配置 ADMIN_TOKEN，写操作已关闭")
+    got = (request.headers.get("X-Admin-Token") or "").strip()
+    if not got:
+        raise HTTPException(401, "需要管理口令")
+    if not hmac.compare_digest(got, ADMIN_TOKEN):
+        raise HTTPException(401, "口令不正确")
+    return
+
+
+# --------------------------------------------------------------------------- #
 # 基础接口
 # --------------------------------------------------------------------------- #
 @app.api_route("/api/health", methods=["GET", "HEAD"])
@@ -173,7 +212,7 @@ def api_person(pid: str):
 
 
 @app.post("/api/persons", status_code=201)
-def api_person_create(payload: dict = Body(...)):
+def api_person_create(payload: dict = Body(...), _admin=Depends(admin_guard)):
     if not payload.get("id") or not payload.get("name"):
         raise HTTPException(400, "缺少字段 id 或 name")
     if db.get_person(payload["id"], with_nodes=False):
@@ -183,14 +222,14 @@ def api_person_create(payload: dict = Body(...)):
 
 
 @app.put("/api/persons/{pid}")
-def api_person_update(pid: str, payload: dict = Body(...)):
+def api_person_update(pid: str, payload: dict = Body(...), _admin=Depends(admin_guard)):
     if not db.get_person(pid, with_nodes=False):
         raise HTTPException(404, "人物不存在：%s" % pid)
     return db.update_person(pid, payload)
 
 
 @app.delete("/api/persons/{pid}")
-def api_person_delete(pid: str):
+def api_person_delete(pid: str, _admin=Depends(admin_guard)):
     if not db.delete_person(pid):
         raise HTTPException(404, "人物不存在：%s" % pid)
     return {"deleted": pid}
@@ -205,7 +244,7 @@ def api_nodes(pid: str):
 
 
 @app.post("/api/persons/{pid}/nodes", status_code=201)
-def api_node_create(pid: str, payload: dict = Body(...)):
+def api_node_create(pid: str, payload: dict = Body(...), _admin=Depends(admin_guard)):
     if not db.get_person(pid, with_nodes=False):
         raise HTTPException(404, "人物不存在：%s" % pid)
     if payload.get("year") is None:
@@ -214,21 +253,21 @@ def api_node_create(pid: str, payload: dict = Body(...)):
 
 
 @app.put("/api/nodes/{node_id}")
-def api_node_update(node_id: str, payload: dict = Body(...)):
+def api_node_update(node_id: str, payload: dict = Body(...), _admin=Depends(admin_guard)):
     if not db.find_node(node_id):
         raise HTTPException(404, "节点不存在：%s" % node_id)
     return db.update_node(node_id, payload)
 
 
 @app.delete("/api/nodes/{node_id}")
-def api_node_delete(node_id: str):
+def api_node_delete(node_id: str, _admin=Depends(admin_guard)):
     if not db.delete_node(node_id):
         raise HTTPException(404, "节点不存在：%s" % node_id)
     return {"deleted": node_id}
 
 
 @app.post("/api/import")
-def api_import(payload: dict = Body(...)):
+def api_import(payload: dict = Body(...), _admin=Depends(admin_guard)):
     strategy = payload.get("strategy", "skip")
     if strategy not in ("skip", "overwrite"):
         raise HTTPException(400, "strategy 只能是 skip 或 overwrite")
@@ -264,6 +303,80 @@ def api_export():
     return {"persons": db.all_persons_full()}
 
 
+MAX_UPLOAD = 5 * 1024 * 1024
+
+
+def normalize_docs(data):
+    """把上传的 JSON 归一成人物数组：数组 / {persons:[]} / {documents:[]} / 单个对象。"""
+    if isinstance(data, list):
+        return [d for d in data if isinstance(d, dict)]
+    if isinstance(data, dict):
+        for key in ("persons", "documents"):
+            if isinstance(data.get(key), list):
+                return [d for d in data[key] if isinstance(d, dict)]
+        if data.get("id"):
+            return [data]
+    return []
+
+
+@app.post("/api/upload")
+async def api_upload(file: UploadFile = File(...), _admin=Depends(admin_guard)):
+    """收一个 .json 文件，解析后原样返回给后台预览；真正写库仍走 /api/import。"""
+    raw = await file.read()
+    if len(raw) > MAX_UPLOAD:
+        raise HTTPException(413, "文件太大（上限 5MB）")
+    try:
+        data = json.loads(raw.decode("utf-8-sig"))
+    except Exception:                                # noqa: BLE001
+        raise HTTPException(400, "不是合法的 UTF-8 JSON")
+    docs = normalize_docs(data)
+    if not docs:
+        raise HTTPException(400, "JSON 里没有人物，需要 [{id,name,nodes:[]}] 或单个对象")
+    errors, nodes = [], 0
+    for d in docs:
+        if not d.get("id") or not d.get("name"):
+            errors.append({"doc": str(d.get("id") or d.get("name") or "?")[:40],
+                           "reason": "缺少 id 或 name"})
+            continue
+        nodes += len([n for n in (d.get("nodes") or []) if isinstance(n, dict)])
+    return {"filename": file.filename, "persons": len(docs), "nodes": nodes,
+            "documents": docs, "errors": errors}
+
+
+@app.get("/api/export/seed.zip")
+def api_export_seed_zip():
+    """导出 seed 包：一人一个 json（文件名=人物 id）+ persons_meta.json，解压即可替换 seed/。"""
+    persons = db.all_persons_full()
+    meta = []
+    for p in persons:
+        meta.append({"id": p["id"], "name": p["name"], "dynasty": p.get("dynasty", ""),
+                     "birth": p.get("birth"), "death": p.get("death"),
+                     "life": p.get("life", ""), "bio": p.get("bio", ""),
+                     "color": p.get("color", ""), "count": len(p.get("nodes") or [])})
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for p in persons:
+            z.writestr("%s.json" % p["id"], json.dumps(p, ensure_ascii=False, indent=1))
+        z.writestr("persons_meta.json", json.dumps(meta, ensure_ascii=False, indent=1))
+    return Response(content=buf.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": 'attachment; filename="seed_pers.zip"'})
+
+
+@app.get("/api/admin/status")
+def api_admin_status(request: Request):
+    """后台用：要不要口令、当前是不是本机。只读，不含口令本身。"""
+    return {"protected": bool(ADMIN_TOKEN),
+            "mode": "token" if ADMIN_TOKEN else "local",
+            "local": is_local(request)}
+
+
+@app.post("/api/admin/verify")
+def api_admin_verify(request: Request):
+    """后台「验证口令」用：口令错直接 401，对就 200，不写任何数据。"""
+    admin_guard(request)
+    return {"ok": True}
+
+
 @app.get("/api/geojson")
 def api_geojson(lang: str = "cn"):
     feats = []
@@ -289,6 +402,128 @@ def api_geojson(lang: str = "cn"):
                           "geometry": {"type": "Point", "coordinates": [nd["lng"], nd["lat"]]},
                           "properties": props})
     return {"type": "FeatureCollection", "features": feats}
+
+
+# --------------------------------------------------------------------------- #
+# 统计（P2）：城市数 / 省份数 / 轨迹里程 / 年份分布 / 诗作数
+# --------------------------------------------------------------------------- #
+PROVINCES = ["北京", "天津", "上海", "重庆", "河北", "山西", "辽宁", "吉林", "黑龙江",
+             "江苏", "浙江", "安徽", "福建", "江西", "山东", "河南", "湖北", "湖南",
+             "广东", "广西", "海南", "四川", "贵州", "云南", "陕西", "甘肃", "青海",
+             "宁夏", "新疆", "西藏", "内蒙古"]
+
+
+def load_city_province():
+    for path in (os.path.join(BASE, "seed", "city_province.json"),
+                 os.path.join(BASE, "..", "数据", "4.对齐后", "city_province.json")):
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8-sig") as f:
+                    return {str(k): str(v) for k, v in json.load(f).items()}
+            except Exception:                        # noqa: BLE001
+                pass
+    return {}
+
+
+CITY_PROVINCE = load_city_province()
+
+
+def place_city(place):
+    """'江油（今四川绵阳）' -> '江油'；'绍兴市' -> '绍兴市'。"""
+    return re.sub(r"[（(][^）)]*[）)]", "", place or "").strip()
+
+
+def province_of(place):
+    """先看 place 里的省份字样（含括号内的“今XX”），再查 city_province.json。"""
+    p = place or ""
+    m = re.search(r"[（(]([^）)]*)[）)]", p)
+    for text in ((m.group(1) if m else ""), p):
+        for prov in PROVINCES:
+            if prov in text:
+                return prov
+    city = place_city(p)
+    for key in (city, re.sub(r"[市县区府州镇]$", "", city)):
+        if key and key in CITY_PROVINCE:
+            return CITY_PROVINCE[key]
+    return None
+
+
+def haversine(a, b):
+    r = 6371.0088
+    lng1, lat1, lng2, lat2 = a[0], a[1], b[0], b[1]
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lng2 - lng1)
+    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(h))
+
+
+def person_stats(doc):
+    nodes = [n for n in (doc.get("nodes") or []) if isinstance(n, dict)]
+    places = []
+    for n in nodes:
+        if n.get("place"):
+            places.append(n["place"])
+    provs = {p for p in (province_of(p) for p in places) if p}
+    pts = [(n["lng"], n["lat"]) for n in nodes
+           if n.get("lng") is not None and n.get("lat") is not None]
+    dist = sum(haversine(a, b) for a, b in zip(pts, pts[1:]))
+    decades = {}
+    for n in nodes:
+        y = n.get("year")
+        if isinstance(y, int):
+            decades[(y // 10) * 10] = decades.get((y // 10) * 10, 0) + 1
+    years = [n["year"] for n in nodes if isinstance(n.get("year"), int)]
+    return {
+        "nodes": len(nodes),
+        "cities": len(set(places)),
+        "provinces": len(provs),
+        "distance_km": round(dist, 1),
+        "poems": sum(1 for n in nodes if (n.get("poem") or "").strip()),
+        "yearFrom": min(years) if years else None,
+        "yearTo": max(years) if years else None,
+        "decades": [{"decade": d, "count": decades[d]} for d in sorted(decades)],
+    }
+
+
+@app.get("/api/stats")
+def api_stats(person: str = ""):
+    if person:
+        doc = db.get_person(person)
+        if not doc:                                  # 也允许直接传姓名
+            for row in db.list_persons("name"):
+                if row["name"] == person:
+                    doc = db.get_person(row["id"])
+                    break
+        if not doc:
+            raise HTTPException(404, "人物不存在：%s" % person)
+        out = person_stats(doc)
+        out.update({"person": doc["id"], "name": doc["name"], "persons": 1})
+        return out
+    docs = db.all_persons_full()
+    merged = {"nodes": 0, "cities": 0, "provinces": 0, "distance_km": 0.0, "poems": 0,
+              "yearFrom": None, "yearTo": None, "decades": {}, "persons": len(docs)}
+    places, provs, rows = set(), set(), []
+    for d in docs:
+        s = person_stats(d)
+        places.update(n["place"] for n in (d.get("nodes") or []) if isinstance(n, dict) and n.get("place"))
+        provs.update(p for p in (province_of(n["place"]) for n in (d.get("nodes") or [])
+                                 if isinstance(n, dict) and n.get("place")) if p)
+        merged["nodes"] += s["nodes"]
+        merged["distance_km"] += s["distance_km"]
+        merged["poems"] += s["poems"]
+        for k in ("yearFrom", "yearTo"):
+            if s[k] is not None:
+                merged[k] = s[k] if merged[k] is None else (
+                    min(merged[k], s[k]) if k == "yearFrom" else max(merged[k], s[k]))
+        for item in s["decades"]:
+            merged["decades"][item["decade"]] = merged["decades"].get(item["decade"], 0) + item["count"]
+        rows.append({"id": d["id"], "name": d["name"], "color": d.get("color", ""), **s})
+    merged["cities"] = len(places)
+    merged["provinces"] = len(provs)
+    merged["distance_km"] = round(merged["distance_km"], 1)
+    merged["decades"] = [{"decade": k, "count": merged["decades"][k]} for k in sorted(merged["decades"])]
+    merged["byPerson"] = rows
+    return merged
 
 
 # --------------------------------------------------------------------------- #

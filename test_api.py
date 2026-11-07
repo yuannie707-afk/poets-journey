@@ -6,13 +6,16 @@ import urllib.error
 import urllib.request
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8100"
+TOKEN = sys.argv[2] if len(sys.argv) > 2 else ""          # 服务端配了 ADMIN_TOKEN 时传第二个参数
 PASS = FAIL = 0
 
 
 def call(method, path, body=None):
     data = json.dumps(body).encode("utf-8") if body is not None else None
-    req = urllib.request.Request(BASE + path, data=data, method=method,
-                                 headers={"Content-Type": "application/json"})
+    headers = {"Content-Type": "application/json"}
+    if TOKEN:
+        headers["X-Admin-Token"] = TOKEN
+    req = urllib.request.Request(BASE + path, data=data, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=90) as r:
             return r.status, json.loads(r.read().decode("utf-8") or "{}")
@@ -35,13 +38,23 @@ def check(name, cond, extra=""):
 
 
 s, j = call("GET", "/api/health")
-check("健康检查 12 人 155 节点", s == 200 and j["persons"] == 12 and j["nodes"] == 155, j)
+check("健康检查 20 人 246 节点", s == 200 and j["persons"] == 20 and j["nodes"] == 246, j)
 s, j = call("GET", "/api/geojson")
-check("GeoJSON 155 点", s == 200 and len(j["features"]) == 155, len(j.get("features", [])))
+check("GeoJSON 246 点", s == 200 and len(j["features"]) == 246, len(j.get("features", [])))
 check("中文键", "人物" in j["features"][0]["properties"])
 s, j = call("GET", "/api/persons/libai")
 check("李白 19 节点", s == 200 and len(j["nodes"]) == 19, len(j.get("nodes", [])))
 check("带生活/配色", bool(j.get("life")) and bool(j.get("color")), (j.get("life"), j.get("color")))
+
+s, j = call("GET", "/api/stats")
+check("统计：20 人 246 节点", s == 200 and j.get("persons") == 20 and j.get("nodes") == 246, (s, j.get("persons")))
+check("统计：城市/省份/里程", s == 200 and j.get("cities", 0) >= 100 and j.get("provinces", 0) >= 15
+      and j.get("distance_km", 0) > 10000, (j.get("cities"), j.get("provinces"), j.get("distance_km")))
+s, j = call("GET", "/api/stats?person=libai")
+check("李白统计", s == 200 and j.get("name") == "李白" and j.get("nodes") == 19 and j.get("poems", 0) > 0,
+      (j.get("name"), j.get("nodes"), j.get("poems")))
+s, j = call("GET", "/api/stats?person=nobody")
+check("统计不存在人物 404", s == 404, s)
 
 s, j = call("POST", "/api/persons", {"id": "t1", "name": "测试", "dynasty": "唐"})
 check("新建 201", s == 201, (s, j))
@@ -61,9 +74,9 @@ s, j = call("DELETE", "/api/persons/t1")
 check("删人物", s == 200, j)
 
 s, j = call("POST", "/api/import", {"strategy": "skip"})
-check("skip 全跳过", s == 200 and len(j.get("skipped", [])) == 12, j.get("skipped"))
+check("skip 全跳过", s == 200 and len(j.get("skipped", [])) == 20, j.get("skipped"))
 s, j = call("POST", "/api/import", {"strategy": "overwrite"})
-check("overwrite 全覆盖", s == 200 and len(j.get("overwritten", [])) == 12, j.get("overwritten"))
+check("overwrite 全覆盖", s == 200 and len(j.get("overwritten", [])) == 20, j.get("overwritten"))
 
 s, j = call("GET", "/api/ask/quota")
 check("额度接口", s == 200 and "remaining" in j, j)
