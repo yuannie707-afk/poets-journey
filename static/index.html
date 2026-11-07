@@ -119,6 +119,7 @@
   <button id="playBtn">播放</button>
   <button id="pauseBtn">暂停</button>
   <button id="resetBtn">重置</button>
+  <button id="baseBtn" title="切换底图">底图：天地图</button>
   <div id="bar"><i></i></div>
 </div>
 
@@ -166,12 +167,50 @@
 const map = L.map('map').setView([30, 112], 5);
 
 const TIANDITU_TK = 'd884a3ac545a4b72a122f1ab3b0eb731';
+
+// 底图：天地图优先，连不上就自动降级到 OpenStreetMap（同为 WGS84，不会偏移）
+const tdtGroup = L.layerGroup();
 if (TIANDITU_TK) {
   L.tileLayer('https://t{s}.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=' + TIANDITU_TK,
-    { subdomains:['0','1','2','3','4','5','6','7'], attribution:'天地图' }).addTo(map);
+    { subdomains:['0','1','2','3','4','5','6','7'], maxZoom:18, attribution:'天地图' }).addTo(tdtGroup);
   L.tileLayer('https://t{s}.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=' + TIANDITU_TK,
-    { subdomains:['0','1','2','3','4','5','6','7'] }).addTo(map);
+    { subdomains:['0','1','2','3','4','5','6','7'], maxZoom:18 }).addTo(tdtGroup);
 }
+const osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  { maxZoom:18, attribution:'© OpenStreetMap contributors' });
+
+const BASE_LABEL = { tdt:'天地图', osm:'OpenStreetMap' };
+const base = { mode: TIANDITU_TK ? 'tdt' : 'osm' };
+
+function setBase(mode, silent) {
+  base.mode = mode;
+  if (mode === 'osm') {
+    if (map.hasLayer(tdtGroup)) map.removeLayer(tdtGroup);
+    osmLayer.addTo(map);
+  } else {
+    if (map.hasLayer(osmLayer)) map.removeLayer(osmLayer);
+    tdtGroup.addTo(map);
+  }
+  var btn = document.getElementById('baseBtn');
+  if (btn) btn.textContent = '底图：' + (BASE_LABEL[mode] || mode);
+  if (!silent) showTip('底图已切换到 ' + (BASE_LABEL[mode] || mode), 4000);
+}
+setBase(base.mode, true);
+
+// 天地图连续失败就自动换（校园网/运营商有时会挡 tianditu.gov.cn）
+var tdtErr = 0;
+tdtGroup.eachLayer(function (layer) {
+  layer.on('tileerror', function () {
+    if (base.mode !== 'tdt') return;
+    if (++tdtErr < 4) return;
+    setBase('osm');
+    showTip('天地图底图加载失败（网络或 key 问题），已自动切到 OpenStreetMap；点位和轨迹不受影响。', 12000);
+  });
+});
+
+document.getElementById('baseBtn').onclick = function () {
+  setBase(base.mode === 'tdt' ? 'osm' : 'tdt');
+};
 
 // ===== 2. 配色 =====
 const colors = {
@@ -240,6 +279,17 @@ async function resolveApi() {
 function setStatus(ok, text) {
   statusBox.className = ok ? 'ok' : 'bad';
   statusText.textContent = text;
+}
+
+// 左下角那条提示（底图降级、分享链接失效等）
+var tipTimer = null;
+function showTip(text, ms) {
+  var t = document.getElementById('tip');
+  if (!t) return;
+  t.textContent = text;
+  t.style.display = 'block';
+  clearTimeout(tipTimer);
+  tipTimer = setTimeout(function () { t.style.display = 'none'; }, ms || 6000);
 }
 
 function apiHint() {
@@ -566,8 +616,10 @@ function updateStep() {
   step = Math.max(0, Math.min(step, vis.length - 1));
   const cur = vis[step];
 
-  P.line.setLatLngs(vis.slice(0, step + 1).map(n => [n.lat, n.lng]));
-  if (step > 0 && !map.hasLayer(P.line)) P.line.addTo(map);
+  // 没在播放、又停在第一个点时，直接画完整轨迹（选诗人就能看到线）
+  const upto = (!timer && step === 0) ? vis.length : step + 1;
+  P.line.setLatLngs(vis.slice(0, upto).map(n => [n.lat, n.lng]));
+  if (upto > 1 && !map.hasLayer(P.line)) P.line.addTo(map);
 
   P.nodes.forEach(n => n.marker.setStyle({ radius: n === cur ? 11 : 7 }));
   map.panTo([cur.lat, cur.lng]);
