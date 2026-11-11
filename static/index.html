@@ -267,6 +267,7 @@ async function resolveApi() {
   const here = location.origin.replace(/\/$/, '');
   const isFile = location.protocol === 'file:';
   const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  const ONLINE = 'https://poets-journey.onrender.com';
   const cands = [];
   if (!isFile) cands.push(here);
   // 只有本地文件或本机打开时才猜本地端口；线上站点不该去探测访客自己的 localhost
@@ -275,6 +276,11 @@ async function resolveApi() {
   }
   for (const b of cands) {
     if (await probe(b, 1200)) return b;
+  }
+  // 双击 html（file://）且本机没跑后端时，直接连线上，团队不改环境也能看
+  if (isFile) {
+    setStatus(false, '本机没后端，正在连线上…');
+    if (await probe(ONLINE, 6000)) { showTip('没有检测到本机后端，已直接连线上 ' + ONLINE); return ONLINE; }
   }
   // 免费层冷启动要 30–60 秒，别 1.2 秒就判死刑，再耐心等一轮
   for (let i = 1; i <= 4; i++) {
