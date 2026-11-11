@@ -743,7 +743,21 @@
   };
 
   // ---------- 启动 ----------
+  // 直接双击本文件（file://）时，自动去连本机的 8000–8010 端口
+  async function resolveApi() {
+    if (location.protocol !== 'file:') return location.origin;
+    for (var p = 8000; p <= 8010; p++) {
+      var b = 'http://127.0.0.1:' + p;
+      try {
+        var r = await fetch(b + '/api/health', { cache: 'no-store' });
+        if (r.ok) return b;
+      } catch (e) { /* 继续试下一个端口 */ }
+    }
+    return location.origin;
+  }
+
   (async function boot() {
+    API = await resolveApi();
     try {
       var st = await api('/api/admin/status');
       protectedMode = !!st.protected;
@@ -762,12 +776,14 @@
       } else {
         setAuth(true, st.local ? '本机免口令' : '未配置口令');
       }
-      setConn(true, '后端 ' + location.host);
+      setConn(true, '后端 ' + String(API || location.origin).replace(/^https?:\/\//, ''));
       await loadPersons(false);
       if (persons.length) await selectPerson(persons[0].id, true);
     } catch (e) {
       setConn(false, '连不上后端');
-      toast('连不上后端：刷新试试，或看 Render 日志', true);
+      toast(location.protocol === 'file:'
+        ? '连不上本机后端：先进 后端-fastapi 目录跑 uvicorn app:app --port 8000，再刷新'
+        : '连不上后端：刷新试试，或看 Render 日志', true);
     }
   })();
 

@@ -27,6 +27,7 @@ import urllib.request
 import zipfile
 
 from fastapi import Body, Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -51,6 +52,16 @@ META_FILE = (os.path.join(BASE, "seed", "persons_meta.json")
              else os.path.join(BASE, "..", "数据", "人物简介.json"))
 
 app = FastAPI(title="诗路重现 API", version="1.0")
+
+# 允许直接双击 static/index.html（file://）也能连本机后端：
+# 数据本身是公开的，写操作仍然要 X-Admin-Token，所以放开跨域不增加写风险。
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=False,
+)
 
 
 # --------------------------------------------------------------------------- #

@@ -265,13 +265,24 @@ async function probe(base, timeoutMs) {
 
 async function resolveApi() {
   const here = location.origin.replace(/\/$/, '');
-  const cands = [here];
-  // 只有本机打开时才猜本地端口；线上站点不该去探测访客自己的 localhost
-  if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) {
-    for (let p = 8000; p <= 8005; p++) cands.push('http://127.0.0.1:' + p);
+  const isFile = location.protocol === 'file:';
+  const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  const cands = [];
+  if (!isFile) cands.push(here);
+  // 只有本地文件或本机打开时才猜本地端口；线上站点不该去探测访客自己的 localhost
+  if (isFile || isLocal) {
+    for (let p = 8000; p <= 8010; p++) cands.push('http://127.0.0.1:' + p);
   }
   for (const b of cands) {
-    if (await probe(b)) return b;
+    if (await probe(b, 1200)) return b;
+  }
+  // 免费层冷启动要 30–60 秒，别 1.2 秒就判死刑，再耐心等一轮
+  for (let i = 1; i <= 4; i++) {
+    setStatus(false, '后端唤醒中…（' + i + '/4，首次打开要 30–60 秒）');
+    await new Promise(r => setTimeout(r, 5000));
+    for (const b of cands) {
+      if (await probe(b, 8000)) return b;
+    }
   }
   return '';
 }
@@ -293,9 +304,13 @@ function showTip(text, ms) {
 }
 
 function apiHint() {
+  if (location.protocol === 'file:') {
+    return '你打开的是本地文件（file://），页面本身不含数据。两种办法：① 先运行后端，' +
+      '再打开 http://127.0.0.1:8000/ ；② 直接看线上 https://poets-journey.onrender.com 。';
+  }
   const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
   return local
-    ? '后端没连上。请双击 D:\\20261011超图校\\后端\\run.bat，保持窗口不关，再刷新本页。'
+    ? '后端没连上。请进 后端-fastapi 目录执行 uvicorn app:app --port 8000（窗口别关），再刷新本页。'
     : '服务暂时不可用（可能刚从休眠中唤醒或正在部署）。请等 30 秒刷新一次；连续失败说明部署有问题。';
 }
 
